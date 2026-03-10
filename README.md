@@ -2,10 +2,31 @@
 
 This project provides a robust basis for a modern web application, consisting of a React + Vite TypeScript frontend and a FastAPI backend using the `uv` package manager, configured with LangChain and SQLite.
 
+## Features
+
+✨ **Complete RAG Pipeline** - Retrieval-Augmented Generation system with:
+
+- Google Gemini LLM and embeddings
+- FAISS vector store for efficient similarity search
+- Multi-format document support (PDF, DOCX, TXT, URLs)
+- Advanced querying and retrieval capabilities
+
+🔐 **Authentication** - Full JWT-based authentication system
+
+🎨 **Modern UI** - React + TypeScript + Vite frontend
+
+⚡ **Fast Backend** - FastAPI with LangChain integration
+
 ## Project Structure
 
 - **frontend/**: A React + TypeScript project built blazingly fast with [Vite](https://vitejs.dev/).
-- **backend/**: A Python backend built with [FastAPI](https://fastapi.tiangolo.com/), featuring integration examples with [LangChain](https://python.langchain.com/) and an [SQLite](https://www.sqlite.org/) database. Dependencies are managed via [uv](https://github.com/astral-sh/uv).
+- **backend/**: A Python backend built with [FastAPI](https://fastapi.tiangolo.com/), featuring:
+  - Complete RAG implementation with [LangChain](https://python.langchain.com/)
+  - Google Gemini integration
+  - FAISS vector store
+  - SQLite database
+  - JWT authentication
+  - Dependencies managed via [uv](https://github.com/astral-sh/uv)
 
 ---
 
@@ -58,9 +79,11 @@ The backend uses [uv](https://github.com/astral-sh/uv), an extremely fast Python
 6. Access the interactive Swagger UI API auto-documentation at [http://localhost:8000/docs](http://localhost:8000/docs).
 
 ### Example Endpoint Testing
+
 The backend setup has a pre-configured SQLite database engine inside `main.py` mimicking a small LLM endpoint logging interface utilizing LangChain components.
 
 You can verify the backend interacts with the setup by testing the POST `/api/ask` endpoint:
+
 ```bash
 curl -X 'POST' \
   'http://localhost:8000/api/ask' \
@@ -70,4 +93,5 @@ curl -X 'POST' \
   "query": "Hello AI!"
 }'
 ```
+
 This query and its simulated LangChain generation are logged automatically into `app.db` (created within the `backend` folder on startup).
