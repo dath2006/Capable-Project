@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import query
 from .routers import rag
+from .routers import flashcards
+from .routers import papers
 from .auth.router import router as auth_router
 from .auth import models as auth_models  # noqa: F401
 
@@ -13,7 +15,7 @@ app = FastAPI(title="Capable Project AI API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -22,6 +24,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(query.router, prefix="/api")
 app.include_router(rag.router, prefix="/api")
+app.include_router(flashcards.router, prefix="/api")
+app.include_router(papers.router, prefix="/api")
 
 
 @app.get("/")
