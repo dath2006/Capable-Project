@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 
 from app.services.rag import RAGService
+from app.ai import get_llm_config_error, has_llm_configuration
 
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
@@ -22,9 +23,10 @@ _rag_service: Optional[RAGService] = None
 
 # Pydantic Schemas
 class RAGInitRequest(BaseModel):
-    """Initialize RAG service with API key."""
-    api_key: str
-    model_name: Optional[str] = "gemini-flash-lite-latest"  # Default model
+    """Initialize RAG service with configured providers."""
+    api_key: Optional[str] = None
+    model_name: Optional[str] = None
+    provider: Optional[str] = None
 
 
 class IndexURLRequest(BaseModel):
@@ -93,22 +95,31 @@ def get_rag_service() -> RAGService:
 @router.post("/init", response_model=RAGResponse)
 async def initialize_rag(request: RAGInitRequest):
     """
-    Initialize the RAG service with Google API key.
+    Initialize the RAG service with configured LLM providers.
     This must be called before using other endpoints.
     """
     global _rag_service
     
     try:
+        if not has_llm_configuration(gemini_api_key=request.api_key):
+            raise HTTPException(status_code=500, detail=get_llm_config_error())
+
         _rag_service = RAGService(
             api_key=request.api_key,
-            model_name=request.model_name
+            model_name=request.model_name,
+            provider=request.provider,
         )
         
         return RAGResponse(
             success=True,
-            message=f"RAG service initialized with model {request.model_name}",
-            data={"model": request.model_name}
+            message="RAG service initialized successfully",
+            data={
+                "model": request.model_name,
+                "provider": request.provider,
+            }
         )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to initialize RAG service: {str(e)}")
 

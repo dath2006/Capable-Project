@@ -2,10 +2,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 import bcrypt
 from jose import jwt, JWTError
-
-SECRET_KEY = "capable-project-secret-change-in-production"
-ALGORITHM = "HS256"
-TOKEN_EXPIRE_MINUTES = 60
+from ..config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE_MINUTES
 
 
 def hash_password(password: str) -> str:
