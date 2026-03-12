@@ -1,0 +1,8 @@
+Machine learning is a subfield of artificial intelligence. It focuses on developing algorithms that learn from data.
+
+Supervised learning involves training models on labeled datasets.
+Unsupervised learning finds hidden patterns in unlabeled data.
+Reinforcement learning uses trial and error, rewarding the agent for beneficial actions.
+
+Neural networks are mathematical models inspired by the human brain. They consist of layers of interconnected nodes called artificial neurons.
+Deep learning uses artificial neural networks with multiple layers (deep networks) to model complex patterns.
