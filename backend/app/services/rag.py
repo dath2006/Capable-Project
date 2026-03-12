@@ -1,12 +1,10 @@
 """
 RAG (Retrieval-Augmented Generation) Service
-Complete end-to-end RAG pipeline with Gemini, FAISS, and multi-format document support.
+Complete end-to-end RAG pipeline with provider fallback, FAISS, and multi-format document support.
 """
 
-import os
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
-import tempfile
 
 # LangChain imports
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -17,11 +15,12 @@ from langchain_community.document_loaders import (
     TextLoader,
 )
 from langchain_community.vectorstores import FAISS
-from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_core.documents import Document
 from langchain_core.tools import tool
 from langchain.agents import create_agent
 import bs4
+
+from ..ai import build_chat_model, build_embeddings
 
 
 class RAGService:
@@ -30,29 +29,35 @@ class RAGService:
     Supports multiple document types: PDF, DOCX, TXT, and URLs.
     """
 
-    def __init__(self, api_key: str, model_name: str = "gemini-flash-lite-latest"):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model_name: str | None = None,
+        provider: str | None = None,
+        groq_api_key: str | None = None,
+    ):
         """
         Initialize the RAG service.
         
         Args:
-            api_key: Google API key for Gemini
-            model_name: Gemini model to use (default: gemini-flash-lite-latest)
+            api_key: Optional Gemini API key override.
+            model_name: Optional preferred model name for the primary provider.
+            provider: Optional preferred primary provider override.
+            groq_api_key: Optional Groq API key override.
         """
         self.api_key = api_key
         self.model_name = model_name
         
-        # Initialize embeddings model
-        self.embeddings = GoogleGenerativeAIEmbeddings(
-            model="gemini-embedding-001",
-            google_api_key=api_key
-        )
+        # Initialize local embeddings model
+        self.embeddings = build_embeddings()
         
-        # Initialize LLM
-        self.llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=api_key,
+        # Initialize LLM with provider fallback
+        self.llm = build_chat_model(
             temperature=0.7,
-            convert_system_message_to_human=True
+            model_name=model_name,
+            gemini_api_key=api_key,
+            groq_api_key=groq_api_key,
+            primary_provider=provider,
         )
         
         # Initialize text splitter

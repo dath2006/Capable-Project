@@ -9,6 +9,7 @@ from ..services.flashcards import FlashcardService
 from ..services.rag import RAGService
 from ..auth.dependencies import get_current_user
 from ..auth.models import User
+from ..ai import get_llm_config_error, has_llm_configuration
 
 router = APIRouter(tags=["flashcards"])
 
@@ -18,12 +19,11 @@ async def generate_flashcards(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not set")
+    if not has_llm_configuration():
+        raise HTTPException(status_code=500, detail=get_llm_config_error())
         
-    flashcard_service = FlashcardService(api_key=api_key)
-    rag_service = RAGService(api_key=api_key)
+    flashcard_service = FlashcardService(api_key=None)
+    rag_service = RAGService()
     
     # Save uploaded file to temp file
     ext = os.path.splitext(file.filename)[1] if file.filename else ".txt"

@@ -1,20 +1,18 @@
-import os
 import json
 from typing import List
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from sqlalchemy.orm import Session
 from .. import models
 from .rag import RAGService
+from ..ai import build_chat_model
 
 class FlashcardService:
-    def __init__(self, api_key: str, model_name: str = "gemini-flash-lite-latest"):
+    def __init__(self, api_key: str | None = None, model_name: str | None = None):
         self.api_key = api_key
-        self.llm = ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=api_key,
+        self.llm = build_chat_model(
             temperature=0.3,
-            convert_system_message_to_human=True
+            model_name=model_name,
+            gemini_api_key=api_key,
         )
 
     def generate_from_documents(self, documents: List, db: Session, title: str, filename: str) -> models.FlashcardDeck:

@@ -11,6 +11,7 @@ from ..auth.models import User
 from .. import models, schemas
 from ..services.rag import RAGService
 from ..services.papers import PaperService
+from ..ai import get_llm_config_error, has_llm_configuration
 
 router = APIRouter(tags=["papers"])
 
@@ -21,9 +22,8 @@ async def generate_paper(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not set")
+    if not has_llm_configuration():
+        raise HTTPException(status_code=500, detail=get_llm_config_error())
 
     # Parse Payload
     try:
@@ -35,8 +35,8 @@ async def generate_paper(
     if not file:
         raise HTTPException(status_code=400, detail="Document file is required")
 
-    rag_service = RAGService(api_key=api_key)
-    paper_service = PaperService(api_key=api_key)
+    rag_service = RAGService()
+    paper_service = PaperService()
 
     # Save uploaded file to temp file
     ext = os.path.splitext(file.filename)[1] if file.filename else ".txt"
@@ -192,8 +192,10 @@ def regenerate_question(paper_id: int, q_id: int, db: Session = Depends(get_db),
     if not db_q:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    paper_service = PaperService(api_key=api_key)
+    if not has_llm_configuration():
+        raise HTTPException(status_code=500, detail=get_llm_config_error())
+
+    paper_service = PaperService()
 
     sec_type = db_q.section.section_type
     chunk = db_q.source_chunk

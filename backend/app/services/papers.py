@@ -1,8 +1,9 @@
 import json
 from typing import List, Dict, Any, Optional
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from pydantic import BaseModel, Field
+
+from ..ai import build_structured_chat_model
 
 # Ensure we use structured outputs for reliable API response parsing
 class GeneratedMCQ(BaseModel):
@@ -38,16 +39,18 @@ class GeneratedCaseStudy(BaseModel):
 
 
 class PaperService:
-    def __init__(self, api_key: str):
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            google_api_key=api_key,
-            temperature=0.7
-        )
+    def __init__(self, api_key: str | None = None, model_name: str | None = None):
+        self.api_key = api_key
+        self.model_name = model_name
 
     def _get_structured_llm(self, output_schema):
-        """Helper to bind structured output to the LLM"""
-        return self.llm.with_structured_output(output_schema)
+        """Helper to bind structured output to the shared LLM chain."""
+        return build_structured_chat_model(
+            output_schema,
+            temperature=0.7,
+            model_name=self.model_name,
+            gemini_api_key=self.api_key,
+        )
 
     def generate_mcq(self, text_chunk: str, difficulty: str) -> GeneratedMCQ:
         prompt = PromptTemplate.from_template(
