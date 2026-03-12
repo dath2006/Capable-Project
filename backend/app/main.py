@@ -1,7 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import query
+#from .routers import rag
+from .routers import quiz                    
 from .routers import rag
 from .routers import flashcards
 from .routers import papers
@@ -23,6 +27,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(query.router, prefix="/api")
+#app.include_router(rag.router, prefix="/api")
+app.include_router(quiz.router, prefix="/api")
 app.include_router(rag.router, prefix="/api")
 app.include_router(flashcards.router, prefix="/api")
 app.include_router(papers.router, prefix="/api")
