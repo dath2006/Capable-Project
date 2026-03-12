@@ -1,8 +1,11 @@
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .database import engine, Base
 from .routers import query
-from .routers import rag
+#from .routers import rag
+from .routers import quiz                          
 from .auth.router import router as auth_router
 from .auth import models as auth_models  # noqa: F401
 
@@ -21,7 +24,8 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(query.router, prefix="/api")
-app.include_router(rag.router, prefix="/api")
+#app.include_router(rag.router, prefix="/api")
+app.include_router(quiz.router, prefix="/api")
 
 
 @app.get("/")
