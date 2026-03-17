@@ -42,23 +42,40 @@ export default function FlashcardDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-1">Your Flashcard Decks</h1>
-          <p className="text-slate-500 text-sm">Review your generated flashcards or create a new deck.</p>
+      <div className="relative overflow-hidden bg-gradient-to-r from-violet-600 to-indigo-700 rounded-3xl p-8 sm:p-12 mb-10 text-white shadow-xl">
+        <div className="relative z-10 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+          <div className="max-w-xl">
+            <h1 className="text-4xl font-extrabold tracking-tight mb-3">Your Study Hub</h1>
+            <p className="text-indigo-100 text-lg">Master any topic with AI-generated flashcards. Review intelligently using spaced repetition.</p>
+          </div>
+          <div className="flex gap-3 flex-wrap">
+            <Link 
+              to="/flashcards/due" 
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 text-white px-6 py-3 rounded-xl font-semibold transition-all hover:shadow-lg flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Study Due
+            </Link>
+            <Link 
+              to="/flashcards/new" 
+              className="bg-white text-indigo-700 hover:bg-slate-50 px-6 py-3 rounded-xl font-bold shadow-lg transition-all hover:shadow-xl hover:-translate-y-0.5 flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Generate Magic
+            </Link>
+          </div>
         </div>
-        <Link 
-          to="/flashcards/new" 
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg font-medium shadow-sm transition-all hover:shadow flex items-center gap-2 flex-shrink-0"
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Generate New
-        </Link>
+        
+        {/* Decorative background elements */}
+        <div className="absolute top-0 right-0 -m-8 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-0 left-10 -m-8 w-40 h-40 bg-indigo-400 opacity-20 rounded-full blur-2xl"></div>
       </div>
 
-      {error && <div className="bg-red-50 border border-red-100 text-red-600 p-4 rounded-lg mb-6 shadow-sm">{error}</div>}
+      {error && <div className="bg-rose-50 border-l-4 border-rose-500 text-rose-700 p-4 rounded-r-lg mb-8 shadow-sm flex items-center gap-3"><span className="text-xl">⚠️</span> {error}</div>}
 
       {loading ? (
         <div className="flex justify-center flex-col items-center h-48 space-y-4">
@@ -82,19 +99,21 @@ export default function FlashcardDashboard() {
           </Link>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 animate-fade-in">
           {decks.map((deck) => (
-            <div key={deck.id} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow group flex flex-col">
-              <div className="p-6 flex-1">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div key={deck.id} className="bg-white rounded-2xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(99,102,241,0.12)] transition-all duration-300 hover:-translate-y-1 group flex flex-col overflow-hidden relative">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-400 to-indigo-500 transform origin-left scale-x-0 group-hover:scale-x-100 transition-transform duration-500 ease-out"></div>
+              
+              <div className="p-8 flex-1">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-50 to-violet-100 text-indigo-600 flex items-center justify-center shadow-inner">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                     </svg>
                   </div>
                   <button 
                     onClick={(e) => { e.preventDefault(); handleDelete(deck.id); }}
-                    className="text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                    className="text-slate-300 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 p-2 hover:bg-rose-50 rounded-full"
                     title="Delete deck"
                   >
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -102,18 +121,26 @@ export default function FlashcardDashboard() {
                     </svg>
                   </button>
                 </div>
-                <h3 className="text-lg font-semibold text-slate-900 mb-1 truncate" title={deck.title}>{deck.title}</h3>
-                <p className="text-sm text-slate-500 mb-4 truncate" title={deck.source_filename}>Source: {deck.source_filename}</p>
-                <div className="flex items-center text-sm text-slate-600 bg-slate-50 rounded-md py-2 px-3 mb-6 inline-block">
-                  <span className="font-semibold text-indigo-600 mr-1.5">{deck.flashcards ? deck.flashcards.length : 0}</span> cards generated
+                
+                <h3 className="text-xl font-bold text-slate-800 mb-2 line-clamp-2" title={deck.title}>{deck.title}</h3>
+                <p className="text-sm text-slate-500 mb-6 flex items-center gap-1.5 truncate" title={deck.source_filename}>
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {deck.source_filename}
+                </p>
+                
+                <div className="flex items-center text-sm font-medium text-slate-600 bg-slate-50/80 rounded-lg py-2px px-4 inline-flex border border-slate-100">
+                  <span className="text-indigo-600 text-lg mr-2 font-bold">{deck.flashcards ? deck.flashcards.length : 0}</span> cards
                 </div>
               </div>
-              <div className="px-6 pb-6 mt-auto">
+              
+              <div className="px-8 pb-8 mt-auto">
                 <Link 
                   to={`/flashcards/${deck.id}`} 
-                  className="block w-full text-center bg-indigo-50 text-indigo-700 hover:bg-indigo-100 py-2.5 rounded-lg font-medium transition-colors"
+                  className="block w-full text-center bg-slate-50 text-indigo-700 hover:bg-indigo-600 hover:text-white py-3.5 rounded-xl font-bold transition-all duration-300"
                 >
-                  Study Now
+                  Start Studying
                 </Link>
               </div>
             </div>

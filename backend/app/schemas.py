@@ -50,9 +50,16 @@ class FlashcardCreate(FlashcardBase):
 class FlashcardResponse(FlashcardBase):
     id: int
     deck_id: int
+    next_review: datetime
+    interval: int
+    repetition: int
+    efactor: float
 
     class Config:
         from_attributes = True
+
+class FlashcardReview(BaseModel):
+    score: int # 0 to 5
 
 class FlashcardDeckBase(BaseModel):
     title: str

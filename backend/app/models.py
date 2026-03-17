@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
@@ -28,6 +28,10 @@ class Flashcard(Base):
     question = Column(String)
     answer = Column(String)
     chunk_source = Column(String, nullable=True)
+    next_review = Column(DateTime, default=datetime.utcnow)
+    interval = Column(Integer, default=0)
+    repetition = Column(Integer, default=0)
+    efactor = Column(Float, default=2.5)
 
     deck = relationship("FlashcardDeck", back_populates="flashcards")
 
