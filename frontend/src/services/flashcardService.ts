@@ -14,6 +14,10 @@ export interface Flashcard {
   question: string;
   answer: string;
   chunk_source?: string;
+  next_review?: string;
+  interval?: number;
+  repetition?: number;
+  efactor?: number;
 }
 
 export interface FlashcardDeck {
@@ -66,6 +70,26 @@ export const flashcardService = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw { response: { data: err, status: res.status } }; // Mimic axios error structure for components
+    }
+    return res.json();
+  },
+  getDueFlashcards: async (): Promise<Flashcard[]> => {
+    const res = await fetch(`${API}/flashcards/due/all`, { headers: getAuthHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) throw { response: { status: 401 } };
+      throw new Error('Failed to fetch due flashcards');
+    }
+    return res.json();
+  },
+  reviewFlashcard: async (id: number, score: number): Promise<Flashcard> => {
+    const res = await fetch(`${API}/flashcards/${id}/review`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ score })
+    });
+    if (!res.ok) {
+      if (res.status === 401) throw { response: { status: 401 } };
+      throw new Error('Failed to review flashcard');
     }
     return res.json();
   }
