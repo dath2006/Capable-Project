@@ -1,52 +1,120 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import AuthLayout from '../components/AuthLayout'
-import InputField from '../components/InputField'
-import { login } from '../services/authApi'
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { login } from "../services/authApi";
+import { setAccessToken } from "../lib/auth";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
 
 export default function LoginPage() {
-    const nav = useNavigate()
-    const [username, setUsername] = useState('')
-    const [password, setPassword] = useState('')
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(false)
+  const nav = useNavigate();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
 
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setError('')
-        setLoading(true)
-        try {
-            const data = await login({ username, password })
-            localStorage.setItem('access_token', data.access_token)
-            nav('/')
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Login failed')
-        } finally { setLoading(false) }
+  const loginMutation = useMutation({
+    mutationFn: async () => {
+      const data = await login({ username, password });
+      return data;
+    },
+    onSuccess: (data) => {
+      setAccessToken(data.access_token);
+      toast.success("Logged in successfully");
+      nav("/");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Login failed");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username.trim() || !password.trim()) {
+      toast.error("Please fill in all fields");
+      return;
     }
+    loginMutation.mutate();
+  };
 
-    return (
-        <AuthLayout title="Welcome back" subtitle="Log in to your account to continue">
-            <form onSubmit={submit} className="flex flex-col gap-5">
-                {error && <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
+  return (
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4 py-12">
+      <Card className="w-full max-w-[420px] animate-fade-in">
+        <CardHeader>
+          <CardTitle className="text-2xl">Welcome back</CardTitle>
+          <CardDescription>Log in to your account to continue</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {loginMutation.error && (
+              <Alert className="border-[var(--danger)] bg-red-50">
+                <AlertDescription className="text-[var(--danger)]">
+                  {loginMutation.error.message || "Login failed"}
+                </AlertDescription>
+              </Alert>
+            )}
 
-                <InputField id="username" label="Username" value={username} onChange={setUsername} placeholder="johndoe" required className="animate-fade-in stagger-1" />
-                <InputField id="password" label="Password" type="password" value={password} onChange={setPassword} placeholder="••••••••" required className="animate-fade-in stagger-2" />
+            <div className="space-y-2">
+              <Label htmlFor="username">Username</Label>
+              <Input
+                id="username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="johndoe"
+                required
+                disabled={loginMutation.isPending}
+              />
+            </div>
 
-                <div className="flex justify-end -mt-2">
-                    <Link to="/forgot-password" className="text-[13px] text-indigo-600 hover:text-indigo-700 font-medium">
-                        Forgot password?
-                    </Link>
-                </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-[var(--primary)] hover:text-[var(--primary-strong)] font-medium"
+                >
+                  Forgot?
+                </Link>
+              </div>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                disabled={loginMutation.isPending}
+              />
+            </div>
 
-                <button type="submit" disabled={loading} className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-all duration-200 text-[14px] disabled:opacity-50 cursor-pointer shadow-sm shadow-indigo-200 hover:shadow-md hover:shadow-indigo-200">
-                    {loading ? 'Logging in...' : 'Log In'}
-                </button>
+            <Button
+              type="submit"
+              disabled={loginMutation.isPending}
+              className="w-full"
+            >
+              {loginMutation.isPending ? "Logging in..." : "Log In"}
+            </Button>
 
-                <p className="text-center text-slate-500 text-[14px]">
-                    Don&apos;t have an account?{' '}
-                    <Link to="/signup" className="text-indigo-600 hover:text-indigo-700 font-semibold">Sign up</Link>
-                </p>
-            </form>
-        </AuthLayout>
-    )
+            <p className="text-center text-[var(--muted-foreground)] text-sm">
+              Don&apos;t have an account?{" "}
+              <Link
+                to="/signup"
+                className="text-[var(--primary)] hover:text-[var(--primary-strong)] font-semibold"
+              >
+                Sign up
+              </Link>
+            </p>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

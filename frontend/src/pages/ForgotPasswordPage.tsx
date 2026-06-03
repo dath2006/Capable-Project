@@ -1,44 +1,114 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import AuthLayout from '../components/AuthLayout'
-import InputField from '../components/InputField'
-import { forgotPassword } from '../services/authApi'
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { forgotPassword } from "../services/authApi";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
 
 export default function ForgotPasswordPage() {
-    const [email, setEmail] = useState('')
-    const [error, setError] = useState('')
-    const [success, setSuccess] = useState('')
-    const [loading, setLoading] = useState(false)
+  const [email, setEmail] = useState("");
+  const [resetToken, setResetToken] = useState("");
 
-    const submit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setError(''); setSuccess('')
-        setLoading(true)
-        try {
-            const data = await forgotPassword(email)
-            setSuccess(`Reset token: ${data.token}`)
-        } catch (err: unknown) {
-            setError(err instanceof Error ? err.message : 'Request failed')
-        } finally { setLoading(false) }
+  const forgotMutation = useMutation({
+    mutationFn: () => forgotPassword(email),
+    onSuccess: (data) => {
+      setResetToken(data.token);
+      toast.success("Reset token sent to your email");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Request failed");
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) {
+      toast.error("Please enter your email address");
+      return;
     }
+    forgotMutation.mutate();
+  };
 
-    return (
-        <AuthLayout title="Forgot password?" subtitle="No worries, we'll help you reset it">
-            <form onSubmit={submit} className="flex flex-col gap-5">
-                {error && <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">{error}</div>}
-                {success && <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 text-sm break-all">{success}</div>}
+  return (
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4 py-12">
+      <Card className="w-full max-w-[420px] animate-fade-in">
+        <CardHeader>
+          <CardTitle className="text-2xl">Forgot password?</CardTitle>
+          <CardDescription>No worries, we'll help you reset it</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            {forgotMutation.error && (
+              <Alert className="border-[var(--danger)] bg-red-50">
+                <AlertDescription className="text-[var(--danger)]">
+                  {forgotMutation.error.message || "Request failed"}
+                </AlertDescription>
+              </Alert>
+            )}
 
-                <InputField id="email" label="Email address" type="email" value={email} onChange={setEmail} placeholder="john@example.com" required className="animate-fade-in stagger-1" />
+            {resetToken && (
+              <Alert className="border-green-200 bg-green-50">
+                <AlertDescription className="text-green-700">
+                  <p className="font-semibold mb-2">Reset token generated:</p>
+                  <code className="block bg-white p-2 rounded border border-green-100 text-xs break-all font-mono">
+                    {resetToken}
+                  </code>
+                </AlertDescription>
+              </Alert>
+            )}
 
-                <button type="submit" disabled={loading} className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl transition-all duration-200 text-[14px] disabled:opacity-50 cursor-pointer shadow-sm shadow-indigo-200 hover:shadow-md hover:shadow-indigo-200">
-                    {loading ? 'Sending...' : 'Send Reset Token'}
-                </button>
-
-                <div className="flex justify-between text-[14px]">
-                    <Link to="/login" className="text-indigo-600 hover:text-indigo-700 font-semibold">← Back to Login</Link>
-                    <Link to="/reset-password" className="text-indigo-600 hover:text-indigo-700 font-semibold">Have a token? →</Link>
+            {!resetToken && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email address *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="john@example.com"
+                    required
+                    disabled={forgotMutation.isPending}
+                  />
                 </div>
-            </form>
-        </AuthLayout>
-    )
+
+                <Button
+                  type="submit"
+                  disabled={forgotMutation.isPending}
+                  className="w-full"
+                >
+                  {forgotMutation.isPending ? "Sending..." : "Send Reset Token"}
+                </Button>
+              </>
+            )}
+
+            <div className="flex justify-between text-sm">
+              <Link
+                to="/login"
+                className="text-[var(--primary)] hover:text-[var(--primary-strong)] font-semibold"
+              >
+                ← Back to Login
+              </Link>
+              <Link
+                to="/reset-password"
+                className="text-[var(--primary)] hover:text-[var(--primary-strong)] font-semibold"
+              >
+                Have a token? →
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }

@@ -1,267 +1,420 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
-import type { SectionConfig, PaperGenerateRequest } from '../services/paperService';
-import { paperService } from '../services/paperService';
-import { UploadCloud, FileText, Settings, Layers, CheckCircle2, X } from 'lucide-react';
+import { useMemo, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import DashboardLayout from "../components/DashboardLayout";
+import type {
+  PaperGenerateRequest,
+  SectionConfig,
+} from "../services/paperService";
+import { paperService, ApiError } from "../services/paperService";
+import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+
+type Step = 1 | 2 | 3 | 4;
+
+const DEFAULT_SECTION: SectionConfig = {
+  type: "mcq",
+  count: 10,
+  marks_per_question: 1,
+};
 
 export default function PaperGeneratePage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  // Form State
+  const [step, setStep] = useState<Step>(1);
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState("");
   const [totalMarks, setTotalMarks] = useState(100);
   const [duration, setDuration] = useState(180);
-  const [difficulty, setDifficulty] = useState('mixed');
-  const [audience, setAudience] = useState('undergraduate');
-  const [topics, setTopics] = useState('');
-  
-  const [sections, setSections] = useState<SectionConfig[]>([
-    { type: 'mcq', count: 10, marks_per_question: 1 }
-  ]);
+  const [difficulty, setDifficulty] = useState("mixed");
+  const [audience, setAudience] = useState("undergraduate");
+  const [topics, setTopics] = useState("");
+  const [sections, setSections] = useState<SectionConfig[]>([DEFAULT_SECTION]);
+  const [error, setError] = useState("");
 
-  const handleDisplayTally = () => {
-     return sections.reduce((acc, sec) => acc + (sec.count * sec.marks_per_question), 0);
+  const currentTally = useMemo(
+    () =>
+      sections.reduce(
+        (acc, section) => acc + section.count * section.marks_per_question,
+        0,
+      ),
+    [sections],
+  );
+
+  const generateMutation = useMutation({
+    mutationFn: ({
+      sourceFile,
+      payload,
+    }: {
+      sourceFile: File;
+      payload: PaperGenerateRequest;
+    }) => paperService.generatePaper(sourceFile, payload),
+    onSuccess: (paper) => {
+      toast.success("Question paper generated");
+      navigate(`/papers/${paper.id}`);
+    },
+    onError: (err: Error) => {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login");
+        return;
+      }
+      setError(err.message || "Failed to generate paper");
+      toast.error(err.message || "Failed to generate paper");
+    },
+  });
+
+  const updateSection = (
+    idx: number,
+    field: keyof SectionConfig,
+    value: string | number,
+  ) => {
+    setSections((prev) => {
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
-  };
-
-  const addSection = () => {
-    setSections([...sections, { type: 'short_answer', count: 1, marks_per_question: 2 }]);
-  };
-
-  const removeSection = (idx: number) => {
-    setSections(sections.filter((_, i) => i !== idx));
-  };
-
-  const updateSection = (idx: number, field: string, val: string | number) => {
-    const newSecs = [...sections];
-    newSecs[idx] = { ...newSecs[idx], [field]: val };
-    setSections(newSecs);
-  };
-
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (!file) {
-      setError("Please select a file.");
+      setError("Please select a source file first.");
       return;
     }
-    const currentTally = handleDisplayTally();
     if (currentTally !== totalMarks) {
-       setError(`Total marks mismatch. Target: ${totalMarks}, Current config: ${currentTally}`);
-       return;
+      setError(
+        `Total marks mismatch. Target ${totalMarks}, configured ${currentTally}.`,
+      );
+      return;
     }
 
-    setLoading(true);
-    setError('');
-
-    const config: PaperGenerateRequest = {
-      title: title || 'Mid-Term Examination',
+    setError("");
+    const payload: PaperGenerateRequest = {
+      title: title || "Mid-Term Examination",
       total_marks: totalMarks,
       duration_minutes: duration,
       difficulty,
       target_audience: audience,
-      topic_focus: topics.split(',').map(t => t.trim()).filter(t => t),
-      sections
+      topic_focus: topics
+        .split(",")
+        .map((topic) => topic.trim())
+        .filter(Boolean),
+      sections,
     };
 
-    try {
-      const resp = await paperService.generatePaper(file, config);
-      navigate(`/papers/${resp.id}`);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || "An error occurred during generation.");
-      setLoading(false);
-    }
+    generateMutation.mutate({ sourceFile: file, payload });
   };
-
 
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6">Generate Question Paper</h2>
-        
-        {/* Stepper Header */}
-        <div className="flex justify-between items-center mb-8 relative">
-          <div className="absolute left-0 top-1/2 w-full h-0.5 bg-slate-200 -z-10"></div>
-          {[
-            { id: 1, label: 'Upload', icon: UploadCloud },
-            { id: 2, label: 'Settings', icon: Settings },
-            { id: 3, label: 'Sections', icon: Layers },
-            { id: 4, label: 'Review', icon: CheckCircle2 }
-          ].map(s => (
-            <div key={s.id} className={`flex flex-col items-center bg-slate-50 px-2 ${step >= s.id ? 'text-indigo-600' : 'text-slate-400'}`}>
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 bg-white ${step >= s.id ? 'border-indigo-600' : 'border-slate-300'}`}>
-                <s.icon size={20} />
-              </div>
-              <span className="text-xs font-medium mt-1">{s.label}</span>
-            </div>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Generate Question Paper</h1>
+          <p className="text-[var(--muted-foreground)]">
+            Upload source material, configure sections, and generate an exam
+            paper.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {[1, 2, 3, 4].map((s) => (
+            <Badge key={s} variant={step === s ? "default" : "outline"}>
+              Step {s}
+            </Badge>
           ))}
         </div>
 
-        {error && <div className="p-4 bg-red-50 text-red-600 rounded-lg mb-6 border border-red-200">{error}</div>}
+        {error && (
+          <Alert className="border-[var(--danger)] bg-red-50">
+            <AlertDescription className="text-[var(--danger)]">
+              {error}
+            </AlertDescription>
+          </Alert>
+        )}
 
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
-          {/* STEP 1: UPLOAD */}
-          {step === 1 && (
-            <div className="animate-fade-in">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Select Source Material</h3>
-              <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:bg-slate-50 transition-colors">
-                 <FileText className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-                 <input type="file" onChange={handleFileChange} className="hidden" id="file-upload" accept=".pdf,.txt,.docx" />
-                 <label htmlFor="file-upload" className="cursor-pointer bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 font-medium rounded-lg inline-block mb-2 transition-colors">
-                   Browse Files
-                 </label>
-                 <p className="text-sm text-slate-500">Supported formats: PDF, DOCX, TXT</p>
-                 {file && <p className="mt-4 text-green-600 font-medium">Selected: {file.name}</p>}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {step === 1 && "Upload File"}
+              {step === 2 && "Paper Settings"}
+              {step === 3 && "Section Rules"}
+              {step === 4 && "Review and Generate"}
+            </CardTitle>
+            <CardDescription>
+              {step === 1 && "Choose a PDF, DOCX, or TXT source file."}
+              {step === 2 && "Set paper metadata and target audience."}
+              {step === 3 && "Define section types, counts, and mark weights."}
+              {step === 4 && "Confirm configuration before generation."}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {step === 1 && (
+              <div className="space-y-3">
+                <Label htmlFor="paper-file">Source file</Label>
+                <Input
+                  id="paper-file"
+                  type="file"
+                  accept=".pdf,.txt,.docx"
+                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                />
+                {file && (
+                  <Badge variant="secondary">Selected: {file.name}</Badge>
+                )}
               </div>
-            </div>
-          )}
+            )}
 
-          {/* STEP 2: SETTINGS */}
-          {step === 2 && (
-            <div className="animate-fade-in space-y-4">
-               <h3 className="text-lg font-semibold text-slate-800 mb-4">Paper Configuration</h3>
-               <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Paper Title</label>
-                 <input type="text" value={title} onChange={e => setTitle(e.target.value)} className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all" placeholder="e.g. Mid-Term Computing EXAM" />
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Total Marks</label>
-                   <input type="number" value={totalMarks} onChange={e => setTotalMarks(Number(e.target.value))} className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all" />
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Duration (Minutes)</label>
-                   <input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="w-full border border-slate-300 p-2.5 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 outline-none transition-all" />
-                 </div>
-               </div>
-               <div className="grid grid-cols-2 gap-4">
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Difficulty Loop</label>
-                   <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="w-full border border-slate-300 p-2.5 rounded-lg outline-none">
-                     <option value="mixed">Mixed (Adaptive)</option>
-                     <option value="easy">Easy Foundation</option>
-                     <option value="medium">Medium Standard</option>
-                     <option value="hard">Hard Analytical</option>
-                   </select>
-                 </div>
-                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Target Audience</label>
-                   <input type="text" value={audience} onChange={e => setAudience(e.target.value)} className="w-full border border-slate-300 p-2.5 rounded-lg outline-none" />
-                 </div>
-               </div>
-               <div>
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Topic Focus (Comma Separated)</label>
-                 <input type="text" value={topics} onChange={e => setTopics(e.target.value)} className="w-full border border-slate-300 p-2.5 rounded-lg outline-none" placeholder="e.g. Backpropagation, Chapter 3" />
-               </div>
-            </div>
-          )}
-
-          {/* STEP 3: SECTIONS */}
-          {step === 3 && (
-            <div className="animate-fade-in">
-              <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-lg font-semibold text-slate-800">Build Sections</h3>
-                 <div className={`font-semibold px-3 py-1 rounded-md ${handleDisplayTally() === totalMarks ? 'text-green-700 bg-green-100' : 'text-orange-700 bg-orange-100'}`}>
-                   Tally: {handleDisplayTally()} / {totalMarks} Marks
-                 </div>
-              </div>
-              <div className="space-y-4 max-h-96 overflow-y-auto p-1">
-                 {sections.map((sec, i) => (
-                   <div key={i} className="flex gap-3 items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
-                     <div className="flex-1">
-                       <select value={sec.type} onChange={e => updateSection(i, 'type', e.target.value)} className="w-full border border-slate-300 p-2 rounded-lg outline-none">
-                         <option value="mcq">Multiple Choice</option>
-                         <option value="true_false">True / False</option>
-                         <option value="fill_in_the_blank">Fill in the Blank</option>
-                         <option value="short_answer">Short Answer</option>
-                         <option value="long_answer">Long Answer</option>
-                         <option value="case_study">Case Study Passage</option>
-                       </select>
-                     </div>
-                     <div className="w-24">
-                       <input type="number" min="1" value={sec.count} onChange={e => updateSection(i, 'count', Number(e.target.value))} className="w-full border border-slate-300 p-2 rounded-lg outline-none" placeholder="Count" />
-                     </div>
-                     <div className="text-slate-400">×</div>
-                     <div className="w-24">
-                       <input type="number" min="1" value={sec.marks_per_question} onChange={e => updateSection(i, 'marks_per_question', Number(e.target.value))} className="w-full border border-slate-300 p-2 rounded-lg outline-none" placeholder="Marks" />
-                     </div>
-                     <div className="w-16 text-right font-medium text-slate-600 border-l border-slate-300 px-2">= {sec.count * sec.marks_per_question}</div>
-                     <button onClick={() => removeSection(i)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={18} /></button>
-                   </div>
-                 ))}
-                 <button onClick={addSection} className="w-full py-2 border-2 border-dashed border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-50 font-medium transition-colors">
-                   + Add Section Rule
-                 </button>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: REVIEW */}
-          {step === 4 && (
-            <div className="animate-fade-in">
-              <h3 className="text-lg font-semibold text-slate-800 mb-4">Review & Generate</h3>
-              {!loading ? (
-                <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 mb-6">
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div><span className="text-slate-500 block text-xs">File Payload</span><span className="font-medium text-slate-800">{file?.name}</span></div>
-                    <div><span className="text-slate-500 block text-xs">Title</span><span className="font-medium text-slate-800">{title || 'Mid-Term Exam'}</span></div>
-                    <div><span className="text-slate-500 block text-xs">Expected Marks / Target</span><span className="font-medium text-slate-800">{handleDisplayTally()} / {totalMarks}</span></div>
-                    <div><span className="text-slate-500 block text-xs">Difficulty</span><span className="font-medium text-slate-800">{difficulty.toUpperCase()}</span></div>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-xs mb-1">Sections Output Profile</span>
-                    <ul className="list-disc list-inside text-sm font-medium text-slate-700">
-                      {sections.map((s, i) => <li key={i}>{s.count}x {s.type.replace('_', ' ')} questions ({s.count * s.marks_per_question} points)</li>)}
-                    </ul>
-                  </div>
+            {step === 2 && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="paper-title">Title</Label>
+                  <Input
+                    id="paper-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Mid-Term Examination"
+                  />
                 </div>
-              ) : (
-                <div className="py-12 flex flex-col items-center">
-                  <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-                  <h4 className="text-lg font-bold text-slate-800 mb-1">Constructing Evaluation...</h4>
-                  <p className="text-slate-500 animate-pulse text-sm">LLM is actively evaluating chunks and formatting chains.</p>
-                </div>
-              )}
-            </div>
-          )}
 
-          {/* Stepper Controls */}
-          <div className="flex justify-between mt-8 border-t border-slate-100 pt-4">
-            <button 
-              onClick={() => setStep(step - 1)} 
-              disabled={step === 1 || loading}
-              className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-50 rounded-lg disabled:opacity-30 transition-colors"
+                <div className="space-y-2">
+                  <Label htmlFor="paper-marks">Total marks</Label>
+                  <Input
+                    id="paper-marks"
+                    type="number"
+                    value={totalMarks}
+                    onChange={(e) => setTotalMarks(Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="paper-duration">Duration (minutes)</Label>
+                  <Input
+                    id="paper-duration"
+                    type="number"
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Difficulty</Label>
+                  <Select value={difficulty} onValueChange={setDifficulty}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select difficulty" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="mixed">Mixed</SelectItem>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="paper-audience">Target audience</Label>
+                  <Input
+                    id="paper-audience"
+                    value={audience}
+                    onChange={(e) => setAudience(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="paper-topics">
+                    Topic focus (comma-separated)
+                  </Label>
+                  <Input
+                    id="paper-topics"
+                    value={topics}
+                    onChange={(e) => setTopics(e.target.value)}
+                    placeholder="Backpropagation, Chapter 3"
+                  />
+                </div>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="font-medium">Sections</p>
+                  <Badge
+                    variant={
+                      currentTally === totalMarks ? "success" : "warning"
+                    }
+                  >
+                    Tally {currentTally} / {totalMarks}
+                  </Badge>
+                </div>
+
+                {sections.map((section, idx) => (
+                  <div
+                    key={idx}
+                    className="grid grid-cols-1 gap-3 rounded-lg border border-[var(--border)] p-4 sm:grid-cols-4"
+                  >
+                    <Select
+                      value={section.type}
+                      onValueChange={(value) =>
+                        updateSection(idx, "type", value)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mcq">Multiple Choice</SelectItem>
+                        <SelectItem value="true_false">True / False</SelectItem>
+                        <SelectItem value="fill_in_the_blank">
+                          Fill in the Blank
+                        </SelectItem>
+                        <SelectItem value="short_answer">
+                          Short Answer
+                        </SelectItem>
+                        <SelectItem value="long_answer">Long Answer</SelectItem>
+                        <SelectItem value="case_study">Case Study</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="number"
+                      min={1}
+                      value={section.count}
+                      onChange={(e) =>
+                        updateSection(idx, "count", Number(e.target.value))
+                      }
+                    />
+                    <Input
+                      type="number"
+                      min={1}
+                      value={section.marks_per_question}
+                      onChange={(e) =>
+                        updateSection(
+                          idx,
+                          "marks_per_question",
+                          Number(e.target.value),
+                        )
+                      }
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <Badge variant="outline">
+                        {section.count * section.marks_per_question} marks
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          setSections((prev) =>
+                            prev.filter((_, i) => i !== idx),
+                          )
+                        }
+                        disabled={sections.length === 1}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setSections((prev) => [
+                      ...prev,
+                      { type: "short_answer", count: 1, marks_per_question: 2 },
+                    ])
+                  }
+                >
+                  Add Section
+                </Button>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="space-y-4 rounded-lg border border-[var(--border)] bg-[var(--secondary-soft)] p-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <p>
+                    <strong>File:</strong> {file?.name ?? "Not selected"}
+                  </p>
+                  <p>
+                    <strong>Title:</strong> {title || "Mid-Term Examination"}
+                  </p>
+                  <p>
+                    <strong>Difficulty:</strong> {difficulty}
+                  </p>
+                  <p>
+                    <strong>Target:</strong> {audience}
+                  </p>
+                  <p>
+                    <strong>Duration:</strong> {duration} minutes
+                  </p>
+                  <p>
+                    <strong>Tally:</strong> {currentTally} / {totalMarks}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="mb-2 font-medium">Section plan</p>
+                  <ul className="space-y-1 text-sm text-[var(--muted-foreground)]">
+                    {sections.map((section, idx) => (
+                      <li key={idx}>
+                        {section.count} x {section.type.replaceAll("_", " ")} (
+                        {section.count * section.marks_per_question} marks)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+          </CardContent>
+
+          <CardFooter className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              onClick={() => setStep((prev) => Math.max(1, prev - 1) as Step)}
+              disabled={step === 1 || generateMutation.isPending}
             >
               Back
-            </button>
-            {step < 4 ? (
-              <button 
-                onClick={() => setStep(step + 1)} 
-                disabled={(step === 1 && !file)}
-                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-              >
-                Next Set
-              </button>
-            ) : (
-              <button 
-                onClick={handleGenerate} 
-                disabled={loading || handleDisplayTally() !== totalMarks}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors shadow-sm"
-              >
-                {loading ? 'Generating...' : 'Issue Final Build Request'}
-              </button>
-            )}
-          </div>
+            </Button>
 
-        </div>
+            {step < 4 && (
+              <Button
+                onClick={() => setStep((prev) => Math.min(4, prev + 1) as Step)}
+                disabled={step === 1 && !file}
+              >
+                Next
+              </Button>
+            )}
+
+            {step === 4 && (
+              <Button
+                onClick={handleGenerate}
+                disabled={
+                  generateMutation.isPending || currentTally !== totalMarks
+                }
+              >
+                {generateMutation.isPending
+                  ? "Generating..."
+                  : "Generate Paper"}
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
       </div>
     </DashboardLayout>
   );

@@ -1,175 +1,215 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import DashboardLayout from '../components/DashboardLayout';
-import type { QuestionPaper } from '../services/paperService';
-import { paperService } from '../services/paperService';
-import { ArrowLeft, Download, Eye, EyeOff, RefreshCcw } from 'lucide-react';
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { toast } from "sonner";
+import DashboardLayout from "../components/DashboardLayout";
+import {
+  paperService,
+  type QuestionPaper,
+  ApiError,
+} from "../services/paperService";
+import { Button } from "../components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Badge } from "../components/ui/badge";
+import { Skeleton } from "../components/ui/skeleton";
 
 export default function PaperPreviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [paper, setPaper] = useState<QuestionPaper | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showAnswers, setShowAnswers] = useState(false);
-  const [regeneratingQ, setRegeneratingQ] = useState<number | null>(null);
+  const [localPaper, setLocalPaper] = useState<QuestionPaper | null>(null);
 
-  useEffect(() => {
-    const fetchPaper = async () => {
-      try {
-        const data = await paperService.getPaper(Number(id));
-        setPaper(data);
-      } catch (err) {
-        console.error(err);
-        navigate('/papers');
-      } finally {
-        setLoading(false);
+  const paperId = Number(id);
+  const paperQuery = useQuery({
+    queryKey: ["papers", "single", paperId],
+    queryFn: () => paperService.getPaper(paperId),
+    enabled: Number.isFinite(paperId),
+  });
+
+  const paper = localPaper ?? paperQuery.data ?? null;
+
+  const regenerateMutation = useMutation({
+    mutationFn: ({ questionId }: { questionId: number }) =>
+      paperService.regenerateQuestion(paperId, questionId),
+    onSuccess: (updatedQuestion, vars) => {
+      if (!paper) return;
+      const nextPaper = structuredClone(paper);
+      for (const section of nextPaper.sections) {
+        const qIdx = section.questions.findIndex(
+          (q) => q.id === vars.questionId,
+        );
+        if (qIdx >= 0) {
+          section.questions[qIdx] = updatedQuestion;
+          break;
+        }
       }
-    };
-    fetchPaper();
-  }, [id, navigate]);
+      setLocalPaper(nextPaper);
+      toast.success("Question regenerated");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to regenerate question");
+    },
+  });
+
+  if (paperQuery.isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="mx-auto max-w-4xl space-y-4">
+          <Skeleton className="h-10 w-1/2" />
+          <Skeleton className="h-6 w-2/3" />
+          <Skeleton className="h-[520px] w-full" />
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (paperQuery.error || !paper) {
+    const err = paperQuery.error;
+    if (err instanceof ApiError && err.status === 401) {
+      navigate("/login");
+    }
+    return (
+      <DashboardLayout>
+        <Alert className="mx-auto mt-8 max-w-2xl border-[var(--danger)] bg-red-50">
+          <AlertDescription className="text-[var(--danger)]">
+            {paperQuery.error?.message || "Paper not found"}
+          </AlertDescription>
+        </Alert>
+      </DashboardLayout>
+    );
+  }
 
   const handleExport = (format: string, type: string) => {
-    window.open(paperService.exportPaperUrl(Number(id), format, type), '_blank');
+    window.open(paperService.exportPaperUrl(paper.id, format, type), "_blank");
   };
-
-  const handleRegenerate = async (qId: number, secIdx: number, qIdx: number) => {
-    if (!paper) return;
-    setRegeneratingQ(qId);
-    try {
-      const newQuestion = await paperService.regenerateQuestion(paper.id, qId);
-      const updatedPaper = { ...paper };
-      updatedPaper.sections[secIdx].questions[qIdx] = newQuestion;
-      setPaper(updatedPaper);
-    } catch (err) {
-      alert('Failed to regenerate specific question.');
-    } finally {
-      setRegeneratingQ(null);
-    }
-  };
-
-
-  if (loading) return (
-    <DashboardLayout>
-       <div className="flex flex-col justify-center items-center h-64">
-          <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-          <p className="mt-4 text-slate-500 font-medium">Loading Document Layout...</p>
-       </div>
-    </DashboardLayout>
-  );
-
-  if (!paper) return <DashboardLayout><h1>Not Found</h1></DashboardLayout>;
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/papers')} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-500 hover:text-indigo-600 transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-slate-800">{paper.title}</h1>
-              <p className="text-sm text-slate-500 font-medium">Source: {paper.source_filename} | Total Marks: {paper.total_marks}</p>
-            </div>
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">{paper.title}</h1>
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Source: {paper.source_filename} | Total: {paper.total_marks} marks
+              | Duration: {paper.duration_minutes} min
+            </p>
           </div>
-          
           <div className="flex flex-wrap gap-2">
-            <button 
-              onClick={() => setShowAnswers(!showAnswers)}
-              className={`flex items-center gap-2 px-4 py-2 font-medium rounded-lg transition-colors border ${showAnswers ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            <Button variant="outline" onClick={() => navigate("/papers")}>
+              Back
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowAnswers((prev) => !prev)}
             >
-              {showAnswers ? <><EyeOff size={18} /> Hide Key</> : <><Eye size={18} /> Show Key</>}
-            </button>
-            
-            <div className="relative group">
-              <button className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg transition-colors shadow-sm">
-                <Download size={18} /> Export
-              </button>
-              <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-10 flex flex-col overflow-hidden">
-                <button onClick={() => handleExport('pdf', 'both')} className="text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 border-b border-slate-100 text-slate-700">PDF - Exam & Key</button>
-                <button onClick={() => handleExport('pdf', 'paper')} className="text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 border-b border-slate-100 text-slate-700">PDF - Exam Only</button>
-                <button onClick={() => handleExport('docx', 'both')} className="text-left px-4 py-3 text-sm font-medium hover:bg-slate-50 text-slate-700">DOCX - Exam & Key</button>
-              </div>
-            </div>
+              {showAnswers ? "Hide Key" : "Show Key"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport("pdf", "both")}
+            >
+              Export PDF (Both)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport("pdf", "paper")}
+            >
+              Export PDF (Paper)
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport("docx", "both")}
+            >
+              Export DOCX
+            </Button>
           </div>
         </div>
 
-        {/* Paper Document Body */}
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 px-8 py-10 md:px-12 md:py-16 min-h-[800px]">
-           <div className="text-center mb-10 border-b-2 border-slate-800 pb-6">
-             <h2 className="text-3xl font-serif font-bold text-slate-900 mb-2">{paper.title}</h2>
-             <div className="flex justify-between items-center text-sm font-medium text-slate-700 uppercase tracking-wider">
-               <span>Time: {paper.duration_minutes} Mins</span>
-               <span>Target: {paper.target_audience}</span>
-               <span>Max Marks: {paper.total_marks}</span>
-             </div>
-           </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{paper.title}</CardTitle>
+            <CardDescription>
+              Target audience: {paper.target_audience}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-8">
+            {paper.sections.map((section, sectionIndex) => (
+              <section key={section.id} className="space-y-4">
+                <div className="flex items-center justify-between border-b border-[var(--border)] pb-2">
+                  <h2 className="text-lg font-semibold uppercase">
+                    Section {sectionIndex + 1}:{" "}
+                    {section.section_type.replaceAll("_", " ")}
+                  </h2>
+                  <Badge variant="outline">
+                    {section.questions.reduce((acc, q) => acc + q.marks, 0)}{" "}
+                    marks
+                  </Badge>
+                </div>
 
-           <div className="space-y-12">
-             {paper.sections.map((sec, sIdx) => (
-               <div key={sec.id}>
-                 <div className="mb-6 border-b border-slate-300 pb-2">
-                   <h3 className="text-lg font-bold text-slate-800 uppercase tracking-widest">
-                     Section {(sIdx + 1)}: {sec.section_type.replace('_', ' ')}
-                   </h3>
-                   <p className="text-sm text-slate-500 font-medium italic mt-1">({sec.questions.reduce((acc, q) => acc + q.marks, 0)} Marks Total)</p>
-                 </div>
+                <div className="space-y-5">
+                  {section.questions.map((question, qIndex) => (
+                    <div
+                      key={question.id}
+                      className="space-y-3 rounded-lg border border-[var(--border)] p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <p className="font-medium leading-relaxed">
+                          {qIndex + 1}. {question.question_text}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{question.marks}</Badge>
+                          <Button
+                            variant="ghost"
+                            disabled={regenerateMutation.isPending}
+                            onClick={() =>
+                              regenerateMutation.mutate({
+                                questionId: question.id,
+                              })
+                            }
+                          >
+                            Regenerate
+                          </Button>
+                        </div>
+                      </div>
 
-                 <div className="space-y-8">
-                   {sec.questions.map((q, qIdx) => (
-                     <div key={q.id} className="relative group pl-6 md:pl-8">
-                       <span className="absolute left-0 top-0 font-bold text-slate-800">{qIdx + 1}.</span>
-                       
-                       <div className="flex justify-between items-start mb-2">
-                         <div className="flex-1 whitespace-pre-wrap font-medium text-slate-800 text-lg leading-relaxed">
-                           {q.question_text}
-                         </div>
-                         <div className="ml-4 flex items-center gap-3">
-                           <span className="text-slate-500 font-semibold whitespace-nowrap">[{q.marks}]</span>
-                           <button 
-                             onClick={() => handleRegenerate(q.id, sIdx, qIdx)}
-                             disabled={regeneratingQ === q.id}
-                             title="Regenerate this specific question"
-                             className={`text-slate-400 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100 ${regeneratingQ === q.id ? 'animate-spin opacity-100 text-indigo-600' : ''}`}
-                           >
-                             <RefreshCcw size={16} />
-                           </button>
-                         </div>
-                       </div>
-                       
-                       {/* Options UI for MCQ */}
-                       {sec.section_type === 'mcq' && q.options && (
-                         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2 text-slate-700 font-medium pl-2">
-                           {JSON.parse(q.options).map((opt: string, i: number) => (
-                             <div key={i} className="flex gap-2">
-                               <span className="font-bold">{String.fromCharCode(65 + i)}.</span> {opt}
-                             </div>
-                           ))}
-                         </div>
-                       )}
+                      {section.section_type === "mcq" && question.options && (
+                        <div className="grid grid-cols-1 gap-2 text-sm text-[var(--muted-foreground)] sm:grid-cols-2">
+                          {JSON.parse(question.options).map(
+                            (option: string, idx: number) => (
+                              <p key={idx}>
+                                {String.fromCharCode(65 + idx)}. {option}
+                              </p>
+                            ),
+                          )}
+                        </div>
+                      )}
 
-                       {/* Answer Key Overlay */}
-                       {showAnswers && q.answer_key && (
-                         <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 text-sm animate-fade-in">
-                           <div className="font-semibold text-green-800 mb-1">Answer Key:</div>
-                           <div className="text-green-700 font-medium mb-2">{q.answer_key.correct_answer}</div>
-                           
-                           {q.answer_key.explanation && (
-                             <>
-                               <div className="font-semibold text-green-800 mb-1 mt-3">Explanation / Rubric:</div>
-                               <div className="text-green-700">{q.answer_key.explanation}</div>
-                             </>
-                           )}
-                         </div>
-                       )}
-
-                     </div>
-                   ))}
-                 </div>
-               </div>
-             ))}
-           </div>
-        </div>
+                      {showAnswers && question.answer_key && (
+                        <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm">
+                          <p className="font-semibold text-green-800">
+                            Answer: {question.answer_key.correct_answer}
+                          </p>
+                          {question.answer_key.explanation && (
+                            <p className="mt-2 text-green-700">
+                              {question.answer_key.explanation}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </CardContent>
+        </Card>
       </div>
     </DashboardLayout>
   );
