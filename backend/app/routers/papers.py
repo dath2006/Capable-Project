@@ -87,9 +87,12 @@ async def generate_paper(
 
     # 3. Generate Sections
     import random
+    from concurrent.futures import ThreadPoolExecutor
     order_idx = 0
-    generated_marks = 0
-
+    
+    # Pre-create all section rows and build list of generation tasks
+    generation_items = []
+    
     for sec_config in config.sections:
         db_section = models.PaperSection(
             paper_id=db_paper.id,
@@ -101,59 +104,155 @@ async def generate_paper(
         db.commit()
         db.refresh(db_section)
         order_idx += 1
-
+        
         difficulties = paper_service._distribute_difficulty(config.difficulty, sec_config.count)
-
+        
         for i in range(sec_config.count):
-            chunk = random.choice(chunks)
             diff = difficulties[i]
+            if sec_config.type == "long_answer":
+                synth_chunks = random.sample(chunks, min(3, len(chunks)))
+                chunk_arg = synth_chunks
+            elif sec_config.type == "case_study":
+                synth_chunks = random.sample(chunks, min(4, len(chunks)))
+                chunk_arg = synth_chunks
+            else:
+                chunk_arg = random.choice(chunks)
+                
+            generation_items.append({
+                "type": sec_config.type,
+                "chunk": chunk_arg,
+                "diff": diff,
+                "section_id": db_section.id,
+                "marks": sec_config.marks_per_question
+            })
+
+    def generate_single(item):
+        sec_type = item["type"]
+        chunk = item["chunk"]
+        diff = item["diff"]
+        try:
+            if sec_type == "mcq":
+                res = paper_service.generate_mcq(chunk, diff)
+            elif sec_type == "true_false":
+                res = paper_service.generate_true_false(chunk, diff)
+            elif sec_type == "fill_in_the_blank":
+                res = paper_service.generate_fill_in_the_blank(chunk, diff)
+            elif sec_type == "short_answer":
+                res = paper_service.generate_short_answer(chunk, diff)
+            elif sec_type == "long_answer":
+                res = paper_service.generate_long_answer(chunk, diff)
+            elif sec_type == "case_study":
+                res = paper_service.generate_case_study(chunk, diff)
+            else:
+                return {"item": item, "result": None, "error": "Unknown section type"}
+            return {"item": item, "result": res, "error": None}
+        except Exception as e:
+            return {"item": item, "result": None, "error": str(e)}
+
+    # Parallelize generation using ThreadPoolExecutor (max 8 concurrent workers)
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(generate_single, generation_items))
+
+    generated_marks = 0
+    for r in results:
+        item = r["item"]
+        res = r["result"]
+        err = r["error"]
+        
+        if err or res is None:
+            print(f"Generation error for {item['type']}: {err}")
+            continue
             
-            # Use appropriate service method
-            try:
-                if sec_config.type == "mcq":
-                    res = paper_service.generate_mcq(chunk, diff)
-                    db_q = models.Question(section_id=db_section.id, question_text=res.question, options=json.dumps(res.options), answer=res.options[res.correct_index], difficulty=diff, source_chunk=chunk, marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = res.options[res.correct_index], res.explanation
-                elif sec_config.type == "true_false":
-                    res = paper_service.generate_true_false(chunk, diff)
-                    db_q = models.Question(section_id=db_section.id, question_text=res.statement, answer=res.answer, difficulty=diff, source_chunk=chunk, marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = res.answer, res.explanation
-                elif sec_config.type == "fill_in_the_blank":
-                    res = paper_service.generate_fill_in_the_blank(chunk, diff)
-                    db_q = models.Question(section_id=db_section.id, question_text=res.sentence, answer=res.blank_word, difficulty=diff, source_chunk=chunk, marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = res.blank_word, res.context
-                elif sec_config.type == "short_answer":
-                    res = paper_service.generate_short_answer(chunk, diff)
-                    db_q = models.Question(section_id=db_section.id, question_text=res.question, answer=res.ideal_answer, difficulty=diff, source_chunk=chunk, marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = res.ideal_answer, ", ".join(res.keywords)
-                elif sec_config.type == "long_answer":
-                    # For long answer, pick 3 random chunks to synthesize
-                    synth_chunks = random.sample(chunks, min(3, len(chunks)))
-                    res = paper_service.generate_long_answer(synth_chunks, diff)
-                    db_q = models.Question(section_id=db_section.id, question_text=res.question, answer=res.ideal_answer, difficulty=diff, source_chunk="Multiple Chunks", marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = res.ideal_answer, res.marking_scheme
-                elif sec_config.type == "case_study":
-                    synth_chunks = random.sample(chunks, min(4, len(chunks)))
-                    res = paper_service.generate_case_study(synth_chunks, diff)
-                    passage_q = f"Passage:\n{res.passage}\n\nQuestions:\n" + "\n".join([f"{idx+1}. {q}" for idx, q in enumerate(res.sub_questions)])
-                    db_q = models.Question(section_id=db_section.id, question_text=passage_q, answer=json.dumps(res.answers), difficulty=diff, source_chunk="Multiple Chunks", marks=sec_config.marks_per_question)
-                    ans_text, ans_exp = "See JSON answers", "See JSON answers"
-                else:
-                    continue # Unknown type
-            except Exception as ex:
-                print(f"Generation error for {sec_config.type}: {ex}")
+        sec_type = item["type"]
+        section_id = item["section_id"]
+        marks = item["marks"]
+        diff = item["diff"]
+        chunk = item["chunk"]
+        
+        try:
+            if sec_type == "mcq":
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=res.question,
+                    options=json.dumps(res.options),
+                    answer=res.options[res.correct_index],
+                    difficulty=diff,
+                    source_chunk=chunk if isinstance(chunk, str) else "Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = res.options[res.correct_index], res.explanation
+            elif sec_type == "true_false":
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=res.statement,
+                    answer=res.answer,
+                    difficulty=diff,
+                    source_chunk=chunk if isinstance(chunk, str) else "Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = res.answer, res.explanation
+            elif sec_type == "fill_in_the_blank":
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=res.sentence,
+                    answer=res.blank_word,
+                    difficulty=diff,
+                    source_chunk=chunk if isinstance(chunk, str) else "Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = res.blank_word, res.context
+            elif sec_type == "short_answer":
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=res.question,
+                    answer=res.ideal_answer,
+                    difficulty=diff,
+                    source_chunk=chunk if isinstance(chunk, str) else "Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = res.ideal_answer, ", ".join(res.keywords)
+            elif sec_type == "long_answer":
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=res.question,
+                    answer=res.ideal_answer,
+                    difficulty=diff,
+                    source_chunk="Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = res.ideal_answer, res.marking_scheme
+            elif sec_type == "case_study":
+                passage_q = f"Passage:\n{res.passage}\n\nQuestions:\n" + "\n".join([f"{idx+1}. {q}" for idx, q in enumerate(res.sub_questions)])
+                db_q = models.Question(
+                    section_id=section_id,
+                    question_text=passage_q,
+                    answer=json.dumps(res.answers),
+                    difficulty=diff,
+                    source_chunk="Multiple Chunks",
+                    marks=marks
+                )
+                ans_text, ans_exp = "See JSON answers", "See JSON answers"
+            else:
                 continue
                 
             db.add(db_q)
             db.commit()
             db.refresh(db_q)
-
+            
             # Save Answer Key
-            db_ans = models.AnswerKey(paper_id=db_paper.id, question_id=db_q.id, correct_answer=ans_text, explanation=ans_exp)
+            db_ans = models.AnswerKey(
+                paper_id=db_paper.id,
+                question_id=db_q.id,
+                correct_answer=ans_text,
+                explanation=ans_exp
+            )
             db.add(db_ans)
             db.commit()
             
-            generated_marks += sec_config.marks_per_question
+            generated_marks += marks
+        except Exception as e:
+            print(f"Failed to save generated question to DB: {e}")
+            continue
 
     if generated_marks == 0:
         db.delete(db_paper)
