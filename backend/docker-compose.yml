@@ -5,13 +5,14 @@ services:
       dockerfile: Dockerfile
     container_name: capable-backend
     ports:
-      - "8000:8000"
+      - "8111:8111"
     env_file:
       - .env
     environment:
       # Force database to be in the persistent data volume path
       - DATABASE_URL=sqlite:////app/data/app.db
       - ENVIRONMENT=production
+      - PORT=8111
     volumes:
       - backend-data:/app/data
       - backend-media:/app/media

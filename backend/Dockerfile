@@ -32,13 +32,14 @@ RUN uv run python -c "from langchain_huggingface import HuggingFaceEmbeddings; H
 # Ensure directory structures for data and media persistence exist
 RUN mkdir -p /app/data /app/media
 
-# Expose backend API port
-EXPOSE 8000
+# Expose backend API port (exposed metadata can be overridden)
+EXPOSE 8111
 
 # Set production environment variables
 ENV HOST=0.0.0.0
-ENV PORT=8000
+ENV PORT=8111
 ENV DATABASE_URL=sqlite:////app/data/app.db
 
-# Run uvicorn to start the FastAPI application
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn to start the FastAPI application dynamically using the PORT env var
+CMD ["sh", "-c", "uv run uvicorn app.main:app --host 0.0.0.0 --port ${PORT}"]
+
