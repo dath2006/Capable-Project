@@ -9,21 +9,30 @@ from .config import (
     GROQ_API_KEY,
     GROQ_MODEL,
     LLM_PRIMARY_PROVIDER,
+    NVIDIA_API_KEY,
+    NVIDIA_MODEL,
 )
 
 
 def get_llm_config_error() -> str:
     return (
-        "No LLM provider configured. Set GOOGLE_API_KEY or GEMINI_API_KEY, "
-        "and optionally GROQ_API_KEY for fallback support."
+        "No LLM provider configured. Set GOOGLE_API_KEY, GEMINI_API_KEY, "
+        "GROQ_API_KEY, or NVIDIA_API_KEY for LLM support."
     )
 
 
 def has_llm_configuration(
     gemini_api_key: str | None = None,
     groq_api_key: str | None = None,
+    nvidia_api_key: str | None = None,
 ) -> bool:
-    return bool(_resolve_provider_order(gemini_api_key, groq_api_key))
+    return bool(
+        _resolve_provider_order(
+            gemini_api_key=gemini_api_key,
+            groq_api_key=groq_api_key,
+            nvidia_api_key=nvidia_api_key,
+        )
+    )
 
 
 def build_chat_model(
@@ -32,12 +41,14 @@ def build_chat_model(
     *,
     gemini_api_key: str | None = None,
     groq_api_key: str | None = None,
+    nvidia_api_key: str | None = None,
     primary_provider: str | None = None,
 ):
     provider_order = _resolve_provider_order(
-        gemini_api_key,
-        groq_api_key,
-        primary_provider,
+        gemini_api_key=gemini_api_key,
+        groq_api_key=groq_api_key,
+        nvidia_api_key=nvidia_api_key,
+        primary_provider=primary_provider,
     )
     models = [
         _build_provider_model(
@@ -46,6 +57,7 @@ def build_chat_model(
             model_name=model_name if index == 0 else None,
             gemini_api_key=gemini_api_key,
             groq_api_key=groq_api_key,
+            nvidia_api_key=nvidia_api_key,
         )
         for index, provider in enumerate(provider_order)
     ]
@@ -59,12 +71,14 @@ def build_structured_chat_model(
     *,
     gemini_api_key: str | None = None,
     groq_api_key: str | None = None,
+    nvidia_api_key: str | None = None,
     primary_provider: str | None = None,
 ):
     provider_order = _resolve_provider_order(
-        gemini_api_key,
-        groq_api_key,
-        primary_provider,
+        gemini_api_key=gemini_api_key,
+        groq_api_key=groq_api_key,
+        nvidia_api_key=nvidia_api_key,
+        primary_provider=primary_provider,
     )
     models = [
         _build_provider_model(
@@ -73,6 +87,7 @@ def build_structured_chat_model(
             model_name=model_name if index == 0 else None,
             gemini_api_key=gemini_api_key,
             groq_api_key=groq_api_key,
+            nvidia_api_key=nvidia_api_key,
         ).with_structured_output(output_schema)
         for index, provider in enumerate(provider_order)
     ]
@@ -92,30 +107,37 @@ def build_embeddings():
 def _resolve_provider_order(
     gemini_api_key: str | None = None,
     groq_api_key: str | None = None,
+    nvidia_api_key: str | None = None,
     primary_provider: str | None = None,
 ) -> list[str]:
     resolved_gemini_key = gemini_api_key or GEMINI_API_KEY
     resolved_groq_key = groq_api_key or GROQ_API_KEY
+    resolved_nvidia_key = nvidia_api_key or NVIDIA_API_KEY
     available_providers: list[str] = []
 
     if resolved_gemini_key:
         available_providers.append("gemini")
     if resolved_groq_key:
         available_providers.append("groq")
+    if resolved_nvidia_key:
+        available_providers.append("nvidia")
 
     if not available_providers:
         return []
 
     preferred_provider = (primary_provider or LLM_PRIMARY_PROVIDER).lower()
-    if preferred_provider not in {"gemini", "groq"}:
-        preferred_provider = "gemini"
+    if preferred_provider not in available_providers:
+        if "gemini" in available_providers:
+            preferred_provider = "gemini"
+        else:
+            preferred_provider = available_providers[0]
 
-    fallback_provider = "groq" if preferred_provider == "gemini" else "gemini"
-    return [
-        provider
-        for provider in [preferred_provider, fallback_provider]
-        if provider in available_providers
-    ]
+    # Build fallback order starting with preferred, then others
+    order = [preferred_provider]
+    for provider in ["gemini", "groq", "nvidia"]:
+        if provider in available_providers and provider not in order:
+            order.append(provider)
+    return order
 
 
 def _build_provider_model(
@@ -125,6 +147,7 @@ def _build_provider_model(
     model_name: str | None,
     gemini_api_key: str | None,
     groq_api_key: str | None,
+    nvidia_api_key: str | None,
 ):
     if provider == "gemini":
         from langchain_google_genai import ChatGoogleGenerativeAI
@@ -143,6 +166,17 @@ def _build_provider_model(
             model=model_name or GROQ_MODEL,
             temperature=temperature,
             api_key=groq_api_key or GROQ_API_KEY,
+            max_retries=2,
+        )
+
+    if provider == "nvidia":
+        from langchain_openai import ChatOpenAI
+
+        return ChatOpenAI(
+            model=model_name or NVIDIA_MODEL,
+            temperature=temperature,
+            api_key=nvidia_api_key or NVIDIA_API_KEY,
+            base_url="https://integrate.api.nvidia.com/v1",
             max_retries=2,
         )
 

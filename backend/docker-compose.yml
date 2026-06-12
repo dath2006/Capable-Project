@@ -1,0 +1,24 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: capable-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      # Force database to be in the persistent data volume path
+      - DATABASE_URL=sqlite:////app/data/app.db
+      - ENVIRONMENT=production
+    volumes:
+      - backend-data:/app/data
+      - backend-media:/app/media
+    restart: always
+
+volumes:
+  backend-data:
+    name: capable_backend_data
+  backend-media:
+    name: capable_backend_media

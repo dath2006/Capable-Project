@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from ..config import ENVIRONMENT
 from ..database import get_db
 from . import schemas, models
 from .utils import (
@@ -62,7 +63,12 @@ def forgot_password(
     user.reset_token = generate_reset_token()
     user.reset_token_expiry = get_reset_expiry()
     db.commit()
-    return {"message": "Reset token generated", "token": user.reset_token}
+    response: dict[str, str] = {
+        "message": "If that email is registered, password reset instructions were sent.",
+    }
+    if ENVIRONMENT != "production":
+        response["token"] = user.reset_token
+    return response
 
 
 @router.post("/reset-password")

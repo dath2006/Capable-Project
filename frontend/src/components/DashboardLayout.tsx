@@ -1,6 +1,9 @@
 import {
+  BarChart3,
+  BookOpen,
   BrainCircuit,
   FileText,
+  Headphones,
   LogOut,
   Sparkles,
   Waypoints,
@@ -19,6 +22,11 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   {
+    to: "/dashboard",
+    label: "Analytics",
+    icon: <BarChart3 className="h-4 w-4" />,
+  },
+  {
     to: "/flashcards",
     label: "Flashcards",
     icon: <Sparkles className="h-4 w-4" />,
@@ -31,8 +39,18 @@ const navItems: NavItem[] = [
   { to: "/quiz", label: "Quiz", icon: <BrainCircuit className="h-4 w-4" /> },
   {
     to: "/rag",
-    label: "RAG Workspace",
+    label: "Study assistant",
     icon: <Waypoints className="h-4 w-4" />,
+  },
+  {
+    to: "/lessons",
+    label: "Audio lessons",
+    icon: <Headphones className="h-4 w-4" />,
+  },
+  {
+    to: "/sources",
+    label: "Sources",
+    icon: <BookOpen className="h-4 w-4" />,
   },
 ];
 
@@ -56,7 +74,7 @@ export default function DashboardLayout({ children }: Props) {
           <div className="flex items-center gap-8">
             <button
               type="button"
-              onClick={() => navigate("/flashcards")}
+              onClick={() => navigate("/dashboard")}
               className="text-lg font-semibold tracking-tight text-[var(--foreground)]"
             >
               Capable Studio

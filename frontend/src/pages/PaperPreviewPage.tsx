@@ -19,6 +19,8 @@ import {
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
+import { getAccessToken } from "../lib/auth";
+import { API_BASE_URL } from "../lib/api-client";
 
 export default function PaperPreviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -86,8 +88,42 @@ export default function PaperPreviewPage() {
     );
   }
 
-  const handleExport = (format: string, type: string) => {
-    window.open(paperService.exportPaperUrl(paper.id, format, type), "_blank");
+  const handleExport = async (format: string, type: string) => {
+    try {
+      const token = getAccessToken();
+      const headers: HeadersInit = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+
+      const params = new URLSearchParams({ format, type });
+      const res = await fetch(
+        `${API_BASE_URL}/api/papers/${paper.id}/export?${params.toString()}`,
+        {
+          method: "GET",
+          headers,
+        }
+      );
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || `Export failed with status ${res.status}`);
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${paper.title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}_${type}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Paper exported successfully");
+    } catch (error: any) {
+      console.error("Export error:", error);
+      toast.error(error.message || "Failed to export paper");
+    }
   };
 
   return (

@@ -1,20 +1,10 @@
 import { useState } from "react";
-import { downloadQuizPDF } from "../../services/quizApi";
-
-interface QuizOption {
-  label: string;
-  text: string;
-}
-
-interface QuizQuestion {
-  id: string;
-  question: string;
-  options: QuizOption[];
-  correct_label: string;
-  explanation: string;
-  concept: string;
-  difficulty: string;
-}
+import { Download, RotateCcw } from "lucide-react";
+import type { QuizQuestion } from "../../services/quizService";
+import { quizService } from "../../services/quizService";
+import { Alert, AlertDescription } from "../ui/alert";
+import { Button } from "../ui/button";
+import { cn } from "../../lib/utils";
 
 interface Props {
   quizId: string;
@@ -39,25 +29,34 @@ export default function ScoreScreen({
   const total = questions.length;
   const pct = Math.round((correctCount / total) * 100);
 
-  const getScoreColor = () => {
-    if (pct >= 80) return "#22c55e";
-    if (pct >= 50) return "#f59e0b";
-    return "#ef4444";
-  };
+  const scoreColor =
+    pct >= 80
+      ? "text-green-600"
+      : pct >= 50
+        ? "text-amber-600"
+        : "text-red-600";
 
-  const getScoreMessage = () => {
-    if (pct === 100) return "🏆 Perfect score! Outstanding!";
-    if (pct >= 80) return "🎉 Excellent work! Well done!";
-    if (pct >= 60) return "👍 Good effort! Keep it up.";
-    if (pct >= 40) return "📚 Keep studying — you will get there!";
-    return "💪 Don't give up! Review and retry.";
-  };
+  const scoreMessage =
+    pct === 100
+      ? "Perfect score — outstanding work."
+      : pct >= 80
+        ? "Excellent work — keep it up."
+        : pct >= 60
+          ? "Good effort — review the explanations."
+          : pct >= 40
+            ? "Keep studying — you are making progress."
+            : "Review the material and try again.";
 
   const handleDownload = async () => {
     setDownloading(true);
     setDownloadError("");
     try {
-      await downloadQuizPDF({ quiz_id: quizId, questions, title, difficulty });
+      await quizService.downloadPDF({
+        quiz_id: quizId,
+        questions,
+        title,
+        difficulty,
+      });
     } catch {
       setDownloadError("PDF download failed. Please try again.");
     } finally {
@@ -66,53 +65,47 @@ export default function ScoreScreen({
   };
 
   return (
-    <div className="score-screen">
-      {/* Trophy */}
-      <div className="trophy-wrap">🏆</div>
-
-      {/* Score */}
-      <div className="score-pct" style={{ color: getScoreColor() }}>
-        {pct}%
-      </div>
-      <div className="score-label">Quiz Complete</div>
-      <div className="score-fraction">
-        {correctCount} of {total} correct
+    <div className="space-y-6 text-center">
+      <div>
+        <p className={cn("text-5xl font-bold", scoreColor)}>{pct}%</p>
+        <h2 className="mt-2 text-2xl font-semibold">Quiz complete</h2>
+        <p className="mt-1 text-[var(--muted-foreground)]">
+          {correctCount} of {total} correct · {title}
+        </p>
       </div>
 
-      {/* Message */}
-      <div className="score-message">{getScoreMessage()}</div>
+      <p className="text-sm text-[var(--muted-foreground)]">{scoreMessage}</p>
 
-      {/* Breakdown */}
-      <div className="score-breakdown">
-        <div className="score-stat">
-          <div className="score-stat-num" style={{ color: "#22c55e" }}>
-            {correctCount}
-          </div>
-          <div className="score-stat-label">Correct</div>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+          <p className="text-2xl font-bold text-green-700">{correctCount}</p>
+          <p className="text-sm text-green-800">Correct</p>
         </div>
-        <div className="score-stat">
-          <div className="score-stat-num" style={{ color: "#ef4444" }}>
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+          <p className="text-2xl font-bold text-red-700">
             {total - correctCount}
-          </div>
-          <div className="score-stat-label">Incorrect</div>
+          </p>
+          <p className="text-sm text-red-800">Incorrect</p>
         </div>
       </div>
 
-      {/* Download error */}
-      {downloadError && <div className="error-box">{downloadError}</div>}
+      {downloadError && (
+        <Alert className="border-[var(--danger)] bg-red-50 text-left">
+          <AlertDescription className="text-[var(--danger)]">
+            {downloadError}
+          </AlertDescription>
+        </Alert>
+      )}
 
-      {/* Actions */}
-      <div className="action-row">
-        <button
-          className="download-btn"
-          onClick={handleDownload}
-          disabled={downloading}
-        >
-          {downloading ? "Generating PDF..." : "⬇ Download Revision PDF"}
-        </button>
-        <button className="restart-btn" onClick={onRestart}>
-          ↺ Take Another Quiz
-        </button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+        <Button onClick={handleDownload} disabled={downloading} className="gap-2">
+          <Download className="h-4 w-4" />
+          {downloading ? "Generating PDF..." : "Download revision PDF"}
+        </Button>
+        <Button variant="outline" onClick={onRestart} className="gap-2">
+          <RotateCcw className="h-4 w-4" />
+          Take another quiz
+        </Button>
       </div>
     </div>
   );

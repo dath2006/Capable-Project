@@ -2,23 +2,27 @@
 RAG Router - API endpoints for the RAG system
 """
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, HttpUrl
 from typing import List, Optional, Dict, Any
 import tempfile
 import os
 from pathlib import Path
 
-from app.services.rag import RAGService
-from app.ai import get_llm_config_error, has_llm_configuration
+from ..ai import get_llm_config_error, has_llm_configuration
+from ..auth.dependencies import get_current_user
+from ..auth.models import User
 
 
 router = APIRouter(prefix="/rag", tags=["RAG"])
 
 
-# Global RAG service instance
-# In production, consider using dependency injection and managing per-user instances
-_rag_service: Optional[RAGService] = None
+from ..services.rag_state import (
+    clear_user_service,
+    ensure_rag_service,
+    get_rag_service,
+    persist_user_store,
+)
 
 
 # Pydantic Schemas
@@ -82,63 +86,58 @@ class StatsResponse(BaseModel):
     embedding_dimension: Optional[int] = None
 
 
-def get_rag_service() -> RAGService:
-    """Get the global RAG service instance."""
-    if _rag_service is None:
-        raise HTTPException(
-            status_code=400, 
-            detail="RAG service not initialized. Please call /rag/init first."
-        )
-    return _rag_service
+class RAGStatusResponse(BaseModel):
+    ready: bool
+    is_indexed: bool
+    total_chunks: int
+    message: str
+
+
+@router.get("/status", response_model=RAGStatusResponse)
+async def rag_status(current_user: User = Depends(get_current_user)):
+    """Report readiness — service auto-initializes from server configuration."""
+    service = ensure_rag_service(current_user.id)
+    stats = service.get_stats()
+    return RAGStatusResponse(
+        ready=True,
+        is_indexed=stats.get("is_indexed", False),
+        total_chunks=stats.get("total_chunks", 0),
+        message=(
+            "Ready — add study materials and ask questions."
+            if stats.get("is_indexed")
+            else "Ready — upload material to start asking questions."
+        ),
+    )
 
 
 @router.post("/init", response_model=RAGResponse)
-async def initialize_rag(request: RAGInitRequest):
-    """
-    Initialize the RAG service with configured LLM providers.
-    This must be called before using other endpoints.
-    """
-    global _rag_service
-    
-    try:
-        if not has_llm_configuration(gemini_api_key=request.api_key):
-            raise HTTPException(status_code=500, detail=get_llm_config_error())
-
-        _rag_service = RAGService(
-            api_key=request.api_key,
-            model_name=request.model_name,
-            provider=request.provider,
-        )
-        
-        return RAGResponse(
-            success=True,
-            message="RAG service initialized successfully",
-            data={
-                "model": request.model_name,
-                "provider": request.provider,
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to initialize RAG service: {str(e)}")
+async def initialize_rag(
+    request: RAGInitRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Legacy init — no longer required; ensures per-user service is ready."""
+    if not has_llm_configuration(gemini_api_key=request.api_key):
+        raise HTTPException(status_code=500, detail=get_llm_config_error())
+    ensure_rag_service(current_user.id)
+    return RAGResponse(
+        success=True,
+        message="Study assistant is ready (using server configuration).",
+        data={"provider": request.provider or "env"},
+    )
 
 
 @router.post("/index/url", response_model=RAGResponse)
-async def index_url(request: IndexURLRequest):
-    """
-    Index a document from a URL.
-    Supports web pages with automatic content extraction.
-    """
-    service = get_rag_service()
-    
+async def index_url(
+    request: IndexURLRequest,
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
+
     try:
-        # Load documents from URL
         docs = service.load_from_url(str(request.url))
-        
-        # Index documents
         num_docs, num_chunks = service.index_documents(docs)
-        
+        persist_user_store(current_user.id)
+
         return RAGResponse(
             success=True,
             message=f"Successfully indexed {num_docs} document(s) from URL",
@@ -153,12 +152,11 @@ async def index_url(request: IndexURLRequest):
 
 
 @router.post("/index/file", response_model=RAGResponse)
-async def index_file(file: UploadFile = File(...)):
-    """
-    Index a document from an uploaded file.
-    Supports: PDF, DOCX, TXT files.
-    """
-    service = get_rag_service()
+async def index_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
     
     # Check file extension
     file_ext = Path(file.filename).suffix.lower()
@@ -190,7 +188,8 @@ async def index_file(file: UploadFile = File(...)):
             
             # Index documents
             num_docs, num_chunks = service.index_documents(docs)
-            
+            persist_user_store(current_user.id)
+
             return RAGResponse(
                 success=True,
                 message=f"Successfully indexed file: {file.filename}",
@@ -210,20 +209,17 @@ async def index_file(file: UploadFile = File(...)):
 
 
 @router.post("/index/text", response_model=RAGResponse)
-async def index_text(request: IndexTextRequest):
-    """
-    Index plain text content directly.
-    Useful for indexing custom text without file upload.
-    """
-    service = get_rag_service()
-    
+async def index_text(
+    request: IndexTextRequest,
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
+
     try:
-        # Create document from text
         docs = service.load_from_string(request.content, request.metadata)
-        
-        # Index documents
         num_docs, num_chunks = service.index_documents(docs)
-        
+        persist_user_store(current_user.id)
+
         return RAGResponse(
             success=True,
             message="Successfully indexed text content",
@@ -238,12 +234,11 @@ async def index_text(request: IndexTextRequest):
 
 
 @router.post("/query", response_model=QueryResponse)
-async def query_rag(request: QueryRequest):
-    """
-    Query the RAG system with a question.
-    Returns an answer based on indexed documents.
-    """
-    service = get_rag_service()
+async def query_rag(
+    request: QueryRequest,
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
     
     try:
         result = service.query(
@@ -260,12 +255,11 @@ async def query_rag(request: QueryRequest):
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search_documents(request: SearchRequest):
-    """
-    Perform similarity search on indexed documents.
-    Returns relevant document chunks without generating an answer.
-    """
-    service = get_rag_service()
+async def search_documents(
+    request: SearchRequest,
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
     
     try:
         docs = service.similarity_search(
@@ -293,11 +287,8 @@ async def search_documents(request: SearchRequest):
 
 
 @router.get("/stats", response_model=StatsResponse)
-async def get_stats():
-    """
-    Get statistics about the indexed documents.
-    """
-    service = get_rag_service()
+async def get_stats(current_user: User = Depends(get_current_user)):
+    service = ensure_rag_service(current_user.id)
     
     try:
         stats = service.get_stats()
@@ -307,15 +298,13 @@ async def get_stats():
 
 
 @router.post("/clear", response_model=RAGResponse)
-async def clear_index():
-    """
-    Clear all indexed documents and reset the vector store.
-    """
-    service = get_rag_service()
-    
+async def clear_index(current_user: User = Depends(get_current_user)):
+    service = get_rag_service(current_user.id)
+
     try:
         service.clear_index()
-        
+        persist_user_store(current_user.id)
+
         return RAGResponse(
             success=True,
             message="Successfully cleared all indexed documents"
@@ -325,14 +314,15 @@ async def clear_index():
 
 
 @router.post("/save", response_model=RAGResponse)
-async def save_index(path: str = Form(...)):
-    """
-    Save the current vector store to disk.
-    """
-    service = get_rag_service()
-    
+async def save_index(
+    path: str = Form(...),
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
+
     try:
         service.save_vector_store(path)
+        persist_user_store(current_user.id)
         
         return RAGResponse(
             success=True,
@@ -345,14 +335,15 @@ async def save_index(path: str = Form(...)):
 
 
 @router.post("/load", response_model=RAGResponse)
-async def load_index(path: str = Form(...)):
-    """
-    Load a previously saved vector store from disk.
-    """
-    service = get_rag_service()
-    
+async def load_index(
+    path: str = Form(...),
+    current_user: User = Depends(get_current_user),
+):
+    service = get_rag_service(current_user.id)
+
     try:
         service.load_vector_store(path)
+        persist_user_store(current_user.id)
         stats = service.get_stats()
         
         return RAGResponse(

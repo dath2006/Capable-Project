@@ -32,6 +32,8 @@ class QuizResponse(BaseModel):
     difficulty: str
     total_questions: int
     questions: list[QuizQuestion]
+    adaptive_applied: bool = False
+    adaptive_reason: Optional[str] = None
 
 class PDFDownloadRequest(BaseModel):
     quiz_id: str
@@ -149,3 +151,115 @@ class QuestionPaperResponse(QuestionPaperBase):
 
     class Config:
         from_attributes = True
+
+
+# --- Analytics & progress tracking ---
+
+class QuizAttemptCreate(BaseModel):
+    quiz_id: str
+    title: str
+    difficulty: str
+    total_questions: int
+    correct_count: int
+    source_filename: Optional[str] = None
+
+
+class QuizAttemptResponse(BaseModel):
+    id: int
+    quiz_id: str
+    title: str
+    difficulty: str
+    total_questions: int
+    correct_count: int
+    score_percent: float
+    source_filename: Optional[str] = None
+    completed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ScoreTrendPoint(BaseModel):
+    label: str
+    score_percent: float
+    completed_at: datetime
+
+
+class FlashcardProgressSummary(BaseModel):
+    deck_count: int
+    card_count: int
+    due_count: int
+    reviews_last_7_days: int
+
+
+class QuizProgressSummary(BaseModel):
+    attempt_count: int
+    average_score: float
+    best_score: float
+    recent_attempts: List[QuizAttemptResponse]
+
+
+class PaperProgressSummary(BaseModel):
+    paper_count: int
+    total_questions: int
+    views_last_7_days: int
+
+
+class AnalyticsSummary(BaseModel):
+    flashcards: FlashcardProgressSummary
+    quiz: QuizProgressSummary
+    papers: PaperProgressSummary
+    score_trend: List[ScoreTrendPoint]
+
+
+# --- Adaptive quiz ---
+
+class AdaptiveDifficultyResponse(BaseModel):
+    recommended: str
+    reason: str
+    average_score: Optional[float] = None
+    attempt_count: int = 0
+
+
+# --- Lesson summaries ---
+
+class LessonSummaryResponse(BaseModel):
+    id: int
+    title: str
+    summary_text: str
+    audio_url: str
+    source_filename: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# --- Educational sources ---
+
+class YouTubeTranscriptRequest(BaseModel):
+    url: str
+
+
+class YouTubeTranscriptResponse(BaseModel):
+    video_id: str
+    title: str
+    transcript: str
+    word_count: int
+    source_url: str
+
+
+class KhanSearchResponse(BaseModel):
+    query: str
+    results: List[dict]
+
+
+class QuizletImportRequest(BaseModel):
+    title: str
+    cards: List[dict]
+
+
+class DiagramAnalysisResponse(BaseModel):
+    analysis: str
+    ocr_text: Optional[str] = None
+    method: str

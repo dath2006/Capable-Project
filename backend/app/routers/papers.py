@@ -173,6 +173,8 @@ def get_paper(paper_id: int, db: Session = Depends(get_db), current_user: User =
     paper = db.query(models.QuestionPaper).filter(models.QuestionPaper.id == paper_id, models.QuestionPaper.user_id == current_user.id).first()
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
+    db.add(models.PaperView(user_id=current_user.id, paper_id=paper.id))
+    db.commit()
     return paper
 
 @router.delete("/papers/{paper_id}")
@@ -251,7 +253,7 @@ def regenerate_question(paper_id: int, q_id: int, db: Session = Depends(get_db),
 import io
 from fastapi.responses import StreamingResponse
 
-@router.post("/papers/{paper_id}/export")
+@router.get("/papers/{paper_id}/export")
 def export_paper(paper_id: int, format: str = "pdf", type: str = "both", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     paper = db.query(models.QuestionPaper).filter(models.QuestionPaper.id == paper_id, models.QuestionPaper.user_id == current_user.id).first()
     if not paper:

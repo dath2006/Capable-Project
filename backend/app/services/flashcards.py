@@ -15,7 +15,14 @@ class FlashcardService:
             gemini_api_key=api_key,
         )
 
-    def generate_from_documents(self, documents: List, db: Session, title: str, filename: str) -> models.FlashcardDeck:
+    def generate_from_documents(
+        self,
+        documents: List,
+        db: Session,
+        title: str,
+        filename: str,
+        user_id: int,
+    ) -> models.FlashcardDeck:
         rag = RAGService(api_key=self.api_key)
         chunks = rag.split_documents(documents)
         
@@ -23,7 +30,9 @@ class FlashcardService:
         if len(chunks) > 20:
             chunks = chunks[:20]
         
-        deck = models.FlashcardDeck(title=title, source_filename=filename)
+        deck = models.FlashcardDeck(
+            title=title, source_filename=filename, user_id=user_id
+        )
         db.add(deck)
         db.commit()
         db.refresh(deck)

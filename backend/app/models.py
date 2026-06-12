@@ -14,11 +14,58 @@ class FlashcardDeck(Base):
     __tablename__ = "flashcard_decks"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     title = Column(String, index=True)
     source_filename = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     flashcards = relationship("Flashcard", back_populates="deck", cascade="all, delete-orphan")
+
+
+class FlashcardReviewLog(Base):
+    __tablename__ = "flashcard_review_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    flashcard_id = Column(Integer, ForeignKey("flashcards.id"))
+    score = Column(Integer)
+    reviewed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    quiz_id = Column(String, index=True)
+    title = Column(String)
+    difficulty = Column(String)
+    total_questions = Column(Integer)
+    correct_count = Column(Integer)
+    score_percent = Column(Float)
+    source_filename = Column(String, nullable=True)
+    completed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PaperView(Base):
+    __tablename__ = "paper_views"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    paper_id = Column(Integer, ForeignKey("question_papers.id"))
+    viewed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class LessonSummary(Base):
+    __tablename__ = "lesson_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    title = Column(String)
+    source_filename = Column(String, nullable=True)
+    summary_text = Column(String)
+    audio_filename = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 class Flashcard(Base):
     __tablename__ = "flashcards"

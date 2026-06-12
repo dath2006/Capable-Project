@@ -61,17 +61,32 @@ export interface SearchRequest {
   filter_dict?: Record<string, unknown>;
 }
 
+export interface RAGStatus {
+  ready: boolean;
+  is_indexed: boolean;
+  total_chunks: number;
+  message: string;
+}
+
 export const ragService = {
+  status: () =>
+    apiRequest<RAGStatus>("/api/rag/status", {
+      method: "GET",
+      requiresAuth: true,
+    }),
+
   init: (payload: RAGInitRequest) =>
     apiRequest<RAGEnvelope>("/api/rag/init", {
       method: "POST",
       body: payload,
+      requiresAuth: true,
     }),
 
   indexUrl: (url: string) =>
     apiRequest<RAGEnvelope>("/api/rag/index/url", {
       method: "POST",
       body: { url },
+      requiresAuth: true,
     }),
 
   indexFile: (file: File) => {
@@ -80,6 +95,7 @@ export const ragService = {
     return apiRequest<RAGEnvelope>("/api/rag/index/file", {
       method: "POST",
       body: formData,
+      requiresAuth: true,
     });
   },
 
@@ -87,28 +103,33 @@ export const ragService = {
     apiRequest<RAGEnvelope>("/api/rag/index/text", {
       method: "POST",
       body: payload,
+      requiresAuth: true,
     }),
 
   query: (payload: QueryRequest) =>
     apiRequest<RAGQueryResponse>("/api/rag/query", {
       method: "POST",
       body: payload,
+      requiresAuth: true,
     }),
 
   search: (payload: SearchRequest) =>
     apiRequest<RAGSearchResponse>("/api/rag/search", {
       method: "POST",
       body: payload,
+      requiresAuth: true,
     }),
 
   stats: () =>
     apiRequest<RAGStats>("/api/rag/stats", {
       method: "GET",
+      requiresAuth: true,
     }),
 
   clear: () =>
     apiRequest<RAGEnvelope>("/api/rag/clear", {
       method: "POST",
+      requiresAuth: true,
     }),
 
   save: (path: string) =>
@@ -118,6 +139,7 @@ export const ragService = {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      requiresAuth: true,
     }),
 
   load: (path: string) =>
@@ -127,5 +149,6 @@ export const ragService = {
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
+      requiresAuth: true,
     }),
 };
